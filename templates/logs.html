@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>System Logs</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f9f9f9;
+            padding: 40px;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            color: #004085;
+            margin-bottom: 30px;
+        }
+
+        .button-bar {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .button-bar form,
+        .button-bar a {
+            display: inline-block;
+            margin: 5px;
+        }
+
+        .button-bar a, .button-bar button {
+            padding: 10px 20px;
+            font-size: 14px;
+            color: white;
+            background-color: #007bff;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: background-color 0.3s ease;
+            cursor: pointer;
+        }
+
+        .button-bar a:hover,
+        .button-bar button:hover {
+            background-color: #0056b3;
+        }
+
+        .button-bar select,
+        .button-bar input[type="text"] {
+            padding: 8px;
+            font-size: 14px;
+        }
+
+        table {
+            width: 90%;
+            margin: auto;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background-color: #004085;
+            color: white;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .icon {
+            margin-right: 8px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1><i class="fas fa-clipboard-list icon"></i> System Activity Logs</h1>
+
+    <div class="button-bar">
+        <a href="{{ url_for('main.export_logs_excel') }}"><i class="fas fa-file-excel"></i> Export to Excel</a>
+        <a href="{{ url_for('main.export_logs_pdf') }}"><i class="fas fa-file-pdf"></i> Export to PDF</a>
+        
+        <form method="post" action="{{ url_for('main.reset_logs') }}" onsubmit="return confirm('Clear all logs?');">
+            <button type="submit"><i class="fas fa-trash"></i> Reset Logs</button>
+        </form>
+    </div>
+
+    <div class="button-bar">
+        <form method="get" action="{{ url_for('main.view_logs') }}">
+            <label for="doctor_id">Filter by Doctor:</label>
+            <select name="doctor_id" id="doctor_id" onchange="this.form.submit()">
+                <option value="">All Doctors</option>
+                {% for doc in doctors %}
+                    <option value="{{ doc.doctor_id }}" {% if selected_doctor_id == doc.doctor_id|string %}selected{% endif %}>
+                        {{ doc.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </form>
+
+        <form method="get" action="{{ url_for('main.view_logs') }}">
+            <input type="text" name="search" placeholder="Search logs..." value="{{ request.args.get('search', '') }}">
+            <button type="submit">🔍</button>
+            {% if request.args.get('search') %}
+                <a href="{{ url_for('main.view_logs') }}" class="btn btn-sm btn-secondary">Reset</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th><i class="fas fa-calendar-alt"></i> Timestamp</th>
+                <th><i class="fas fa-tasks"></i> Action</th>
+                <th><i class="fas fa-id-card"></i> Patient ID</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ log.action }}</td>
+                <td>{{ log.patient_id }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

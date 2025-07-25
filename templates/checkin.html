@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patient Check-In</title>
+    <h1><strong>PLEASE PROVIDE ALL RELEVANT DETAILS IN THE FORM </strong></h1>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(to bottom right, #e3f2fd, #fce4ec);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .checkin-container {
+      background: white;
+      padding: 2rem 3rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+      max-width: 450px;
+      width: 100%;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 1.5rem;
+      color: #2c3e50;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      color: #333;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 0.75rem;
+      margin-bottom: 1.2rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: #6200ea;
+      color: white;
+      font-weight: bold;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background-color: #3700b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="checkin-container">
+    <h2>📋 Patient Check-In</h2>
+    <form method="POST">
+      <label for="patient_id">Patient ID</label>
+      <input type="text" id="patient_id" name="patient_id" placeholder="e.g. A1234" required>
+
+      <label for="name">Full Name</label>
+      <input type="text" id="name" name="name" placeholder="John Doe" required>
+
+      <label for="category">Visit Category</label>
+      <select id="category" name="category" required>
+        <option value="emergency">🚑 Emergency</option>
+        <option value="on_time">⏱ On Time Appointment</option>
+        <option value="early">🌄 Early Appointment</option>
+        <option value="late">⏰ Late Appointment</option>
+        <option value="walk_in">🚶 Walk-In</option>
+      </select>
+
+      <button type="submit">Check In</button>
+    </form>
+  </div>
+</body>
+</html>

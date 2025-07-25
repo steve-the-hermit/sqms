@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome to SQMS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f9f9f9;
+            padding: 2rem;
+        }
+        h2 {
+            color: #333;
+        }
+        table {
+            width: 100%;
+            margin-top: 1rem;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 1rem;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #6200ea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h2>🧾 Receipt Assignments</h2>
+    <p>Patients who have checked in — see your ticket number and doctor below:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Patient Name</th>
+                <th>Receipt ID</th>
+                <th>Doctor Assigned</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q, patient, doctor in queue_data %}
+            <tr>
+                <td>{{ patient.name }}</td>
+                <td>
+                    {% set receipt = receipts.get(patient.patient_id) %}
+                    {{ receipt.receipt_id if receipt else 'N/A' }}
+                </td>
+                <td>{{ doctor.name if doctor else 'Waiting...' }}</td>
+                <td>
+                    {% if q.served %}
+                        ✅ Served
+                    {% else %}
+                        ⏳ Waiting
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
