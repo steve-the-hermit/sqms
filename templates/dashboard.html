@@ -298,7 +298,28 @@ body.dark-mode select {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}#scrollBtn {
+  display: none;
+  position: fixed;
+  bottom: 30px;
+  right: 40px;
+  z-index: 99;
+  font-size: 18px;
+  border: none;
+  outline: none;
+  background-color: #6200ea;
+  color: white;
+  cursor: pointer;
+  padding: 12px 16px;
+  border-radius: 50px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: background-color 0.3s;
 }
+
+#scrollBtn:hover {
+  background-color: #3700b3;
+}
+
 </style>
 </head>
 <body>
@@ -312,7 +333,9 @@ body.dark-mode select {
   <a href="/dashboard"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
   <a href="/checkin"><i class="fas fa-user-plus"></i> New Check-in</a>
   <a href="/logs"><i class="fas fa-clipboard-list"></i> System Logs</a>
-  <a href="/simulate/start"><i class="fas fa-play"></i> Start Simulation</a>
+<form action="/simulate/start" method="post" style="margin: 0;">
+  <button type="submit" class="sidebar-btn">▶ Start Simulation</button>
+</form>
   <a href="/simulate/stop"><i class="fas fa-stop"></i> Stop Simulation</a>
 
   <div class="dark-toggle">
@@ -393,6 +416,7 @@ body.dark-mode select {
       </tbody>
     </table>
   </div>
+  <button onclick="scrollToTop()" id="scrollBtn" title="Go to top">⬆️</button>
 <script>
   function toggleDarkMode() {
     const isDark = document.getElementById('darkModeSwitch').checked;
@@ -413,6 +437,18 @@ body.dark-mode select {
       spinner.style.display = 'none';
     }
   });
+   window.onscroll = function() {
+    const btn = document.getElementById("scrollBtn");
+    if (document.body.scrollTop > 200 || document.documentElement.scrollTop > 200) {
+      btn.style.display = "block";
+    } else {
+      btn.style.display = "none";
+    }
+  };
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 </script>
 </body>
 </html>

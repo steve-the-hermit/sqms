@@ -52,23 +52,47 @@ def checkin():
         pid = request.form['patient_id']
         name = request.form['name']
         cat = request.form['category']
+
         wait = {'emergency': 0, 'on_time': 10, 'early': 20, 'late': 30, 'walk_in': 40}
         priority = {'emergency': 1, 'on_time': 2, 'early': 3, 'late': 4, 'walk_in': 4}
+
         patient = Patient.query.get(pid)
         if not patient:
             patient = Patient(patient_id=pid, name=name, category=cat)
             db.session.add(patient)
         else:
-            patient.name = name; patient.category = cat
+            patient.name = name
+            patient.category = cat
+
         rid = f"R{int(time.time() * 1000)}"
         receipt = Receipt(receipt_id=rid, patient_id=pid, estimated_wait=wait.get(cat, 45))
-        doctor = Doctor.query.filter_by(is_available=True).first()
-        if doctor: doctor.is_available = False
-        queue = Queue(patient_id=pid, doctor_id=doctor.doctor_id if doctor else None, priority_level=priority.get(cat, 5))
+
+        # === Least Busy Doctor Logic ===
+        doctors = Doctor.query.filter_by(is_available=True).all()
+        doctor_loads = {
+            doctor.doctor_id: Queue.query.filter_by(doctor_id=doctor.doctor_id, served=False).count()
+            for doctor in doctors
+        }
+
+        assigned_doctor_id = min(doctor_loads, key=doctor_loads.get) if doctor_loads else None
+        assigned_doctor = Doctor.query.get(assigned_doctor_id) if assigned_doctor_id else None
+
+        if assigned_doctor:
+            assigned_doctor.is_available = False  # Optional: toggle if doctor should only take one at a time
+
+        queue = Queue(
+            patient_id=pid,
+            doctor_id=assigned_doctor.doctor_id if assigned_doctor else None,
+            priority_level=priority.get(cat, 5)
+        )
+
         db.session.add_all([receipt, queue, Log(action='Checked in', patient_id=pid)])
         db.session.commit()
+
         return redirect(f"/?receipt_id={rid}")
+
     return render_template('checkin.html')
+
 
 
 @main.route('/dashboard')
