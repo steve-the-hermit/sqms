@@ -16,7 +16,7 @@ class Log(db.Model):
 class Doctor(db.Model):
     __tablename__ = 'doctors'
 
-    id = db.Column(db.Integer, primary_key=True) 
+    id = db.Column(db.Integer, primary_key=True)  
     name = db.Column(db.String(64), nullable=False)
     is_available = db.Column(db.Boolean, default=True)
     specialization = db.Column(db.String(64), nullable=True)

@@ -406,9 +406,10 @@ body.dark-mode select {
           </td>
           <td>
             {% if not q.served %}
-            <form action="/serve/{{ q.queue_id }}" method="post">
-              <button type="submit">Serve</button>
-            </form>
+           <form method="POST" action="{{ url_for('admin_serve_patient', queue_id=q.queue_id) }}">
+    <button type="submit" class="btn btn-success btn-sm">Serve</button>
+</form>
+
             {% else %}-{% endif %}
           </td>
         </tr>

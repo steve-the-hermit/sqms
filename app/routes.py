@@ -3,6 +3,7 @@ from .models import db, Patient, Receipt, Queue, Doctor, Log
 from .simulation import start_simulation, stop_simulation
 import time, io, pandas as pd
 from fpdf import FPDF
+from werkzeug.security import generate_password_hash, check_password_hash
 
 main = Blueprint('main', __name__)
 
@@ -11,7 +12,7 @@ def homepage():
     queue_entries = (
         db.session.query(Queue, Patient, Doctor)
         .join(Patient, Queue.patient_id == Patient.patient_id)
-        .outerjoin(Doctor, Queue.doctor_id == Doctor.doctor_id)
+        .outerjoin(Doctor, Queue.doctor_id == Doctor.id)
         .filter(Queue.served == False)
         .order_by(Queue.arrival_time)
         .all()
@@ -175,15 +176,15 @@ def stop_sim():
     flash("Simulation stopped", "info")
     return redirect('/dashboard')
 
-@main.route('/serve/<int:queue_id>', methods=['POST'])
-def serve_patient(queue_id):
+@main.route('/admin/serve/<int:queue_id>', methods=['POST'])
+def admin_serve_patient(queue_id):
     if not session.get('admin_logged_in'):
         return redirect('/login')
 
     queue = Queue.query.get(queue_id)
     if queue:
         queue.served = True
-        log = Log(action='Patient served', patient_id=queue.patient_id)
+        log = Log(action='Patient served', patient_id=queue.patient_id, actor='Admin')
         doctor = Doctor.query.get(queue.doctor_id)
         if doctor:
             doctor.is_available = True
@@ -194,3 +195,81 @@ def serve_patient(queue_id):
         flash('Queue entry not found.', 'danger')
 
     return redirect('/dashboard')
+
+@main.route('/serve/<int:queue_id>', methods=['POST'])
+def serve_patient(queue_id):
+    doctor_id = session.get('doctor_id')
+    if not doctor_id:
+        flash('Please log in as a doctor to serve patients.', 'warning')
+        return redirect('/doctor_login')
+
+    queue = Queue.query.get(queue_id)
+    if queue and queue.doctor_id == doctor_id:
+        queue.served = True
+        queue.session_end_time = datetime.utcnow()
+        doctor = Doctor.query.get(doctor_id)
+        doctor.is_available = True
+
+        log = Log(action='Patient served', patient_id=queue.patient_id, actor=f'Dr. {doctor.name}')
+        db.session.add(log)
+        db.session.commit()
+        flash('Patient served successfully.', 'success')
+    else:
+        flash('Unauthorized or invalid queue item.', 'danger')
+
+    return redirect('/doctor_dashboard')
+
+
+
+
+
+@main.route('/doctor/login', methods=['GET', 'POST'])
+def doctor_login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        doctor = Doctor.query.filter_by(username=username).first()
+
+        if doctor and doctor.check_password(password):
+            session['doctor_id'] = doctor.id
+            flash('Login successful.', 'success')
+            return redirect(url_for('main.doctor_dashboard'))
+        else:
+            flash('Invalid credentials', 'danger')
+
+    return render_template('doctor_login.html')
+
+
+@main.route('/doctor/dashboard')
+def doctor_dashboard():
+    if not session.get('doctor_logged_in'):
+        return redirect('/doctor/login')
+
+    doctor_id = session.get('doctor_id')
+    patients = Queue.query.filter_by(doctor_id=doctor_id, served=False).all()
+
+    return render_template('doctor_dashboard.html', patients=patients)
+
+@main.route('/doctor/serve/<int:queue_id>', methods=['POST'])
+def doctor_serve_patient(queue_id):
+    if not session.get('doctor_logged_in'):
+        return redirect('/doctor/login')
+
+    queue = Queue.query.get(queue_id)
+    if queue:
+        queue.served = True
+        doctor = Doctor.query.get(queue.doctor_id)
+        if doctor:
+            doctor.is_available = True
+        db.session.add(Log(action='Doctor served patient', patient_id=queue.patient_id))
+        db.session.commit()
+        flash('Patient served successfully.', 'success')
+
+    return redirect('/doctor/dashboard')
+
+@main.route('/doctor/logout')
+def doctor_logout():
+    session.pop('doctor_logged_in', None)
+    session.pop('doctor_id', None)
+    flash('Logged out successfully.', 'info')
+    return redirect('/doctor/login')
