@@ -133,7 +133,7 @@ python main.py
 ## 👨‍💻 Developed by
 
 * **Steve Macharia**
-  [GitHub](https://github.com/steve-the-hermit) | [LinkedIn](https://linkedin.com/in/your-linkedin)
+  [GitHub](https://github.com/steve-the-hermit) | [LinkedIn](https://linkedin.com/in/steve-macharia-the-hermit)
 
 
 
