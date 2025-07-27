@@ -1,13 +1,66 @@
-<!DOCTYPE html>
-<html>
-<head><title>Receipt</title></head>
-<body>
-  <h1>Receipt</h1>
-  <p>Welcome to our established HOSPITAL!</p>
-  <p><strong>Patient ID:</strong> {{ patient.patient_id }}</p>
-  <p><strong>Name:</strong> {{ patient.name }}</p>
-  <p><strong>Category:</strong> {{ patient.category }}</p>
-  <p><strong>Receipt No:</strong> {{ receipt.receipt_id }}</p>
-  <p><strong>Estimated Wait Time:</strong> {{ receipt.estimated_wait }} minutes</p>
-</body>
-</html>
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-success">Check-In Receipt</h2>
+        <button class="btn btn-outline-secondary" onclick="toggleDarkMode()">Toggle Dark Mode</button>
+    </div>
+
+    <div class="bg-light p-4 rounded shadow-sm" style="max-width: 700px; margin: auto;">
+        <h5 class="mb-3">Patient Details</h5>
+        <ul class="list-group mb-4">
+            <li class="list-group-item"><strong>Name:</strong> {{ patient.name }}</li>
+            <li class="list-group-item"><strong>Phone:</strong> {{ patient.phone }}</li>
+        </ul>
+
+        {% if doctor %}
+            <h5 class="mb-3">Assigned Doctor</h5>
+            <ul class="list-group">
+                <li class="list-group-item"><strong>Doctor:</strong> {{ doctor.name }}</li>
+                <li class="list-group-item"><strong>Specialization:</strong> {{ doctor.specialization or 'N/A' }}</li>
+            </ul>
+        {% else %}
+            <div class="alert alert-warning mt-3">
+                No doctor is currently available. You will be assigned shortly.
+            </div>
+        {% endif %}
+    </div>
+    
+
+    <div class="text-center mt-4">
+        <a href="/" class="btn btn-success">Return to Homepage</a>
+    </div>
+</div>
+
+<!-- Scroll to Top -->
+<button onclick="scrollToTop()" id="scrollBtn" class="btn btn-success rounded-circle shadow" style="position:fixed;bottom:30px;right:30px;display:none;">
+    ↑
+</button>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Scroll-to-top logic
+    window.onscroll = function () {
+        document.getElementById("scrollBtn").style.display = window.scrollY > 200 ? "block" : "none";
+    };
+
+    function scrollToTop() {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Dark mode toggle
+    function toggleDarkMode() {
+        document.body.classList.toggle('bg-dark');
+        document.body.classList.toggle('text-light');
+
+        const cards = document.querySelectorAll('.bg-light');
+        cards.forEach(card => {
+            card.classList.toggle('bg-light');
+            card.classList.toggle('bg-dark');
+            card.classList.toggle('text-light');
+        });
+    }
+</script>
+{% endblock %}

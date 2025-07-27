@@ -1,15 +1,19 @@
-from flask import Blueprint, request, render_template, redirect, session, flash, make_response, send_file, current_app, url_for
-from .models import db, Patient, Receipt, Queue, Doctor, Log
-from .simulation import start_simulation, stop_simulation
-import time, io, pandas as pd
-from fpdf import FPDF
+from flask import Blueprint, render_template, redirect, request, session, flash
+from app.models import db, Patient, Queue, Log, Receipt, Doctor
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+import pandas as pd
+import io
+from flask import send_file
+from flask import url_for
+
+
 
 main = Blueprint('main', __name__)
 
 @main.route('/')
 def homepage():
-    queue_entries = (
+    queue = (
         db.session.query(Queue, Patient, Doctor)
         .join(Patient, Queue.patient_id == Patient.patient_id)
         .outerjoin(Doctor, Queue.doctor_id == Doctor.id)
@@ -17,174 +21,79 @@ def homepage():
         .order_by(Queue.arrival_time)
         .all()
     )
+    return render_template('home.html', queue=queue)
 
-    receipts = {
-        r.patient_id: r for r in Receipt.query.order_by(Receipt.issue_time.desc()).all()
-    }
+@main.route('/checkin', methods=['GET', 'POST'])
+def checkin():
+    if request.method == 'POST':
+        patient_id = request.form['patient_id']
+        name = request.form['name']
+        phone = request.form['phone']
+        category = request.form['category']  # 👈 Add this line
 
-    return render_template('home.html', queue_data=queue_entries, receipts=receipts)
+        patient = Patient(patient_id=patient_id, name=name, phone=phone, category=category)
+        db.session.add(patient)
+        db.session.commit()
 
+        # Assign doctor
+        least_busy_doctor = (
+            db.session.query(Doctor)
+            .outerjoin(Queue, (Doctor.id == Queue.doctor_id) & (Queue.served == False))
+            .group_by(Doctor.id)
+            .order_by(db.func.count(Queue.queue_id))
+            .first()
+        )
+
+        doctor_id = least_busy_doctor.id if least_busy_doctor else None
+        queue_entry = Queue(patient_id=patient_id, doctor_id=doctor_id)
+        db.session.add(queue_entry)
+
+        receipt = Receipt(patient_id=patient_id, doctor_id=doctor_id)
+        db.session.add(receipt)
+
+        log = Log(action='Patient checked in', patient_id=patient_id)
+        db.session.add(log)
+
+        db.session.commit()
+
+        return render_template('receipt.html',receipt=receipt, patient=patient, doctor=least_busy_doctor)
+    return render_template('checkin.html')
 
 
 @main.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        if username == current_app.config['ADMIN_USERNAME'] and password == current_app.config['ADMIN_PASSWORD']:
+        username = request.form['username']
+        password = request.form['password']
+        if username == 'admin' and password == 'admin123':
             session['admin_logged_in'] = True
-            flash('Login successful', 'success')
-            return redirect(url_for('main.dashboard'))
-        else:
-            flash('Invalid credentials', 'danger')
+            return redirect('/dashboard')
+        flash('Invalid credentials', 'danger')
     return render_template('login.html')
-
-
-@main.route('/logout')
-def logout():
-    session.pop('admin_logged_in', None)
-    flash("You have been logged out.", "info")
-    return redirect(url_for('main.login'))
-
-
-@main.route('/checkin', methods=['GET', 'POST'])
-def checkin():
-    if request.method == 'POST':
-        pid = request.form['patient_id']
-        name = request.form['name']
-        cat = request.form['category']
-
-        wait = {'emergency': 0, 'on_time': 10, 'early': 20, 'late': 30, 'walk_in': 40}
-        priority = {'emergency': 1, 'on_time': 2, 'early': 3, 'late': 4, 'walk_in': 4}
-
-        patient = Patient.query.get(pid)
-        if not patient:
-            patient = Patient(patient_id=pid, name=name, category=cat)
-            db.session.add(patient)
-        else:
-            patient.name = name
-            patient.category = cat
-
-        rid = f"R{int(time.time() * 1000)}"
-        receipt = Receipt(receipt_id=rid, patient_id=pid, estimated_wait=wait.get(cat, 45))
-
-        # === Least Busy Doctor Logic ===
-        doctors = Doctor.query.filter_by(is_available=True).all()
-        doctor_loads = {
-            doctor.doctor_id: Queue.query.filter_by(doctor_id=doctor.doctor_id, served=False).count()
-            for doctor in doctors
-        }
-
-        assigned_doctor_id = min(doctor_loads, key=doctor_loads.get) if doctor_loads else None
-        assigned_doctor = Doctor.query.get(assigned_doctor_id) if assigned_doctor_id else None
-
-        if assigned_doctor:
-            assigned_doctor.is_available = False  # Optional: toggle if doctor should only take one at a time
-
-        queue = Queue(
-            patient_id=pid,
-            doctor_id=assigned_doctor.doctor_id if assigned_doctor else None,
-            priority_level=priority.get(cat, 5)
-        )
-
-        db.session.add_all([receipt, queue, Log(action='Checked in', patient_id=pid)])
-        db.session.commit()
-
-        return redirect(f"/?receipt_id={rid}")
-
-    return render_template('checkin.html')
-
-
 
 @main.route('/dashboard')
 def dashboard():
     if not session.get('admin_logged_in'):
-        flash("Please log in as admin to access the dashboard.", "warning")
-        return redirect(url_for('main.login'))
-
-    status = request.args.get('status')
-    doctor_name = request.args.get('doctor')
-    search_term = request.args.get('search', '')
-    query = db.session.query(Queue, Patient, Doctor).join(Patient).outerjoin(Doctor)
-    if status == 'served': query = query.filter(Queue.served == True)
-    elif status == 'waiting': query = query.filter(Queue.served == False)
-    if doctor_name: query = query.filter(Doctor.name.ilike(f"%{doctor_name}%"))
-    if search_term:
-        query = query.filter((Patient.patient_id.ilike(f"%{search_term}%")) | (Patient.name.ilike(f"%{search_term}%")))
-    queue_data = query.order_by(Queue.priority_level, Queue.arrival_time).all()
-    doctors = Doctor.query.order_by(Doctor.name).all()
-    return render_template('dashboard.html', queue_data=queue_data, doctor_list=doctors)
-
-
-@main.route('/logs')
-def view_logs():
-    if not session.get('admin_logged_in'):
-        flash("Admin login required to access logs.", "warning")
-        return redirect(url_for('main.login'))
-    logs = Log.query.order_by(Log.timestamp.desc()).all()
-    return render_template('logs.html', logs=logs)
-
-
-@main.route('/logs/export/excel')
-def export_logs_excel():
-    if not session.get('admin_logged_in'):
-        return redirect(url_for('main.login'))
-    logs = Log.query.all()
-    data = [{'Timestamp': log.timestamp, 'Action': log.action, 'Patient ID': log.patient_id} for log in logs]
-    df = pd.DataFrame(data)
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False)
-    output.seek(0)
-    return send_file(output, download_name='logs.xlsx', as_attachment=True)
-
-
-@main.route('/logs/export/pdf')
-def export_logs_pdf():
-    if not session.get('admin_logged_in'):
-        return redirect(url_for('main.login'))
-    logs = Log.query.all()
-    pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="System Logs", ln=True, align='C'); pdf.ln(10)
-    for log in logs:
-        pdf.multi_cell(0, 10, txt=f"{log.timestamp} - {log.action} - Patient ID: {log.patient_id}")
-    output = io.BytesIO(); pdf.output(output); output.seek(0)
-    return send_file(output, download_name='logs.pdf', as_attachment=True)
-
-@main.route('/logs/reset', methods=['POST'])
-def reset_logs():
-    if not session.get('admin_logged_in'):
         return redirect('/login')
-    
-    Log.query.delete()
-    db.session.commit()
-    return redirect('/logs')
 
-@main.route('/simulate/start', methods=['POST'])
-def start_sim():
-    if not session.get('admin_logged_in'):
-        return redirect('/login')
-    start_simulation(current_app._get_current_object())
-    flash("Simulation started", "success")
-    return redirect('/dashboard')
+    queue = (
+        db.session.query(Queue, Patient, Doctor)
+        .join(Patient, Queue.patient_id == Patient.patient_id)
+        .outerjoin(Doctor, Queue.doctor_id == Doctor.id)
+        .order_by(Queue.arrival_time)
+        .all()
+    )
+    return render_template('dashboard.html', queue=queue)
 
-@main.route('/simulate/stop', methods=['POST'])
-def stop_sim():
-    if not session.get('admin_logged_in'):
-        return redirect('/login')
-    stop_simulation()
-    flash("Simulation stopped", "info")
-    return redirect('/dashboard')
-
-@main.route('/admin/serve/<int:queue_id>', methods=['POST'])
-def admin_serve_patient(queue_id):
+@main.route('/serve/<int:queue_id>', methods=['POST'])
+def serve_patient(queue_id):
     if not session.get('admin_logged_in'):
         return redirect('/login')
 
     queue = Queue.query.get(queue_id)
     if queue:
         queue.served = True
-        log = Log(action='Patient served', patient_id=queue.patient_id, actor='Admin')
+        log = Log(action='Patient served', patient_id=queue.patient_id)
         doctor = Doctor.query.get(queue.doctor_id)
         if doctor:
             doctor.is_available = True
@@ -196,32 +105,41 @@ def admin_serve_patient(queue_id):
 
     return redirect('/dashboard')
 
-@main.route('/serve/<int:queue_id>', methods=['POST'])
-def serve_patient(queue_id):
+
+
+@main.route('/doctor/serve/<int:queue_id>', methods=['POST'])
+def doctor_serve_patient(queue_id):
     doctor_id = session.get('doctor_id')
     if not doctor_id:
-        flash('Please log in as a doctor to serve patients.', 'warning')
-        return redirect('/doctor_login')
+        return redirect('/doctor/login')
 
     queue = Queue.query.get(queue_id)
     if queue and queue.doctor_id == doctor_id:
         queue.served = True
-        queue.session_end_time = datetime.utcnow()
         doctor = Doctor.query.get(doctor_id)
-        doctor.is_available = True
-
-        log = Log(action='Patient served', patient_id=queue.patient_id, actor=f'Dr. {doctor.name}')
+        if doctor:
+            doctor.is_available = True
+        log = Log(action='Patient served by doctor', patient_id=queue.patient_id)
         db.session.add(log)
         db.session.commit()
         flash('Patient served successfully.', 'success')
     else:
-        flash('Unauthorized or invalid queue item.', 'danger')
+        flash('Invalid access or queue entry not found.', 'danger')
 
-    return redirect('/doctor_dashboard')
+    return redirect('/doctor/dashboard')
 
+@main.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/')
 
-
-
+@main.route('/logs')
+def view_logs():
+    if not session.get('admin_logged_in'):
+        return redirect('/login')
+    
+    logs = Log.query.order_by(Log.timestamp.desc()).all()
+    return render_template('logs.html', logs=logs)
 
 @main.route('/doctor/login', methods=['GET', 'POST'])
 def doctor_login():
@@ -229,47 +147,57 @@ def doctor_login():
         username = request.form['username']
         password = request.form['password']
         doctor = Doctor.query.filter_by(username=username).first()
-
-        if doctor and doctor.check_password(password):
+        if doctor and check_password_hash(doctor.password_hash, password):
             session['doctor_id'] = doctor.id
-            flash('Login successful.', 'success')
-            return redirect(url_for('main.doctor_dashboard'))
-        else:
-            flash('Invalid credentials', 'danger')
-
+            flash('Login successful!', 'success')
+            return redirect(f'/doctor/dashboard/{doctor.id}')
+        flash('Invalid credentials', 'danger')
     return render_template('doctor_login.html')
 
-
-@main.route('/doctor/dashboard')
-def doctor_dashboard():
-    if not session.get('doctor_logged_in'):
+@main.route('/doctor/dashboard/<int:doctor_id>')
+def doctor_dashboard(doctor_id):
+    doctor = Doctor.query.get(doctor_id)
+    if not doctor:
+        flash('Doctor not found.', 'danger')
         return redirect('/doctor/login')
 
-    doctor_id = session.get('doctor_id')
-    patients = Queue.query.filter_by(doctor_id=doctor_id, served=False).all()
+    queue = Queue.query.filter_by(doctor_id=doctor_id, served=False).order_by(Queue.arrival_time).all()
 
-    return render_template('doctor_dashboard.html', patients=patients)
+    return render_template('doctor_dashboard.html', doctor=doctor, queue=queue)
 
-@main.route('/doctor/serve/<int:queue_id>', methods=['POST'])
-def doctor_serve_patient(queue_id):
-    if not session.get('doctor_logged_in'):
-        return redirect('/doctor/login')
 
-    queue = Queue.query.get(queue_id)
-    if queue:
-        queue.served = True
-        doctor = Doctor.query.get(queue.doctor_id)
-        if doctor:
-            doctor.is_available = True
-        db.session.add(Log(action='Doctor served patient', patient_id=queue.patient_id))
-        db.session.commit()
-        flash('Patient served successfully.', 'success')
 
-    return redirect('/doctor/dashboard')
+@main.route('/export/excel')
+def export_logs_excel():
+    logs = Log.query.all()
+
+    data = [{
+        "Timestamp": log.timestamp,
+        "Action": log.action,
+        "User": log.user,
+        "Details": log.details
+    } for log in logs]
+
+    df = pd.DataFrame(data)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Logs')
+
+    output.seek(0)
+
+    return send_file(output,
+                     download_name="logs.xlsx",
+                     as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@main.route('/print_receipt/<int:receipt_id>/')
+def print_receipt(receipt_id):
+    receipt = Receipt.query.get_or_404(receipt_id)
+    return render_template('printable_receipt.html', receipt=receipt)
 
 @main.route('/doctor/logout')
 def doctor_logout():
     session.pop('doctor_logged_in', None)
     session.pop('doctor_id', None)
-    flash('Logged out successfully.', 'info')
-    return redirect('/doctor/login')
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('main.doctor_login'))

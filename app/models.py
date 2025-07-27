@@ -35,15 +35,19 @@ class Patient(db.Model):
     __tablename__ = 'patients'
     patient_id = db.Column(db.String(100), primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    phone = db.Column(db.String(20))
     category = db.Column(db.Enum('emergency', 'on_time', 'early', 'late', 'walk_in'), nullable=False)
     registered_at = db.Column(db.DateTime, server_default=db.func.now())
 
 class Receipt(db.Model):
     __tablename__ = 'receipts'
-    receipt_id = db.Column(db.String(200), primary_key=True)
+
+    receipt_id = db.Column(db.Integer, primary_key=True)
     patient_id = db.Column(db.String(100), db.ForeignKey('patients.patient_id'))
-    issue_time = db.Column(db.DateTime, server_default=db.func.now())
+    doctor_id = db.Column(db.Integer, db.ForeignKey('doctors.id'))
     estimated_wait = db.Column(db.Integer)
+    timestamp = db.Column(db.DateTime, default=db.func.now())  
+
 
 class Queue(db.Model):
     __tablename__ = 'queue'

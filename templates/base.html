@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}SQMS{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap CSS (online or offline) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+  body.dark-mode {
+    background-color: #121212;
+    color: white;
+  }
+  .dark-mode .card {
+    background-color: #1e1e1e;
+    color: #ddd;
+  }
+  .dark-mode .btn {
+    background-color: #333;
+    color: white;
+  }
+</style>
+<script>
+  function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+  }
+
+  window.onload = function () {
+    if (localStorage.getItem('darkMode') === 'true') {
+      document.body.classList.add('dark-mode');
+    }
+  };
+</script>
+<button onclick="toggleDarkMode()" class="btn btn-secondary btn-sm">🌓 Toggle Dark Mode</button>
+
+</head>
+<body class="{% if session.get('dark_mode') %}dark-mode{% endif %}">
+
+    {% block content %}{% endblock %}
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

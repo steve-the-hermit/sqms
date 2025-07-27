@@ -36,7 +36,7 @@ def auto_simulate(app):
 
             doctor = Doctor.query.filter_by(is_available=True).first()
             if doctor:
-                doctor_id = doctor.doctor_id
+                doctor_id =Doctor.id
                 doctor.is_available = False
                 session_duration = random.randint(10, 30)
                 session_end = datetime.utcnow() + timedelta(seconds=session_duration)
