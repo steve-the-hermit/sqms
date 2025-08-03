@@ -36,7 +36,7 @@ def auto_simulate(app):
 
             doctor = Doctor.query.filter_by(is_available=True).first()
             if doctor:
-                doctor_id =Doctor.id
+                doctor_id = doctor.id
                 doctor.is_available = False
                 session_duration = random.randint(10, 30)
                 session_end = datetime.utcnow() + timedelta(seconds=session_duration)
@@ -53,7 +53,7 @@ def auto_simulate(app):
             )
 
             db.session.add(patient)
-            db.session.flush() 
+            db.session.flush()
             db.session.add(receipt)
             db.session.add(queue)
             db.session.add(Log(action="Auto Check-in", patient_id=patient_id))
@@ -81,16 +81,17 @@ def auto_simulate(app):
             for unq in unassigned:
                 available_doc = Doctor.query.filter_by(is_available=True).first()
                 if available_doc:
-                    unq.doctor_id = available_doc.doctor_id
+                    unq.doctor_id = available_doc.id
                     available_doc.is_available = False
                     unq.session_end_time = datetime.utcnow() + timedelta(seconds=random.randint(10, 30))
                     db.session.add(Log(action="Reassigned Doctor", patient_id=unq.patient_id))
                 else:
-                    break 
+                    break
 
             db.session.commit()
             time.sleep(10)
-def start_simulation(app):
+
+def start_simulation_logic(app):
     global simulating, sim_thread
     if not simulating:
         simulating = True
@@ -98,11 +99,10 @@ def start_simulation(app):
         sim_thread.daemon = True
         sim_thread.start()
 
-def stop_simulation():
+def stop_simulation_logic():
     global simulating
     simulating = False
 
-
 def init_app(app):
     with app.app_context():
-     print("🧠 Simulation module ready.")
+        print("🧠 Simulation module ready.")

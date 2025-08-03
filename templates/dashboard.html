@@ -6,6 +6,8 @@
   <title>Patient Queue Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <meta http-equiv="refresh" content="5">
+
   <style>
     body {
       font-family: 'Inter', sans-serif;
@@ -390,30 +392,24 @@ body.dark-mode select {
         </tr>
       </thead>
       <tbody>
-        {% for q, patient, doctor in queue_data %}
-        <tr>
-          <td>{{ patient.patient_id }}</td>
-          <td>{{ patient.name }}</td>
-          <td>{{ patient.category.title() }}</td>
-          <td>{{ q.priority_level }}</td>
-          <td>{{ doctor.name if doctor else 'Unassigned' }}</td>
-          <td>
-            {% if q.served %}
-              <span class="badge badge-served">Served ✅</span>
-            {% else %}
-              <span class="badge badge-pending">Waiting ⏳</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if not q.served %}
-           <form method="POST" action="{{ url_for('admin_serve_patient', queue_id=q.queue_id) }}">
-    <button type="submit" class="btn btn-success btn-sm">Serve</button>
-</form>
+    {% for q, patient, doctor in queue %}
+<tr>
+  <td>{{ patient.patient_id }}</td>
+  <td>{{ patient.name }}</td>
+  <td>{{ patient.category }}</td>
+  <td>{{ q.priority_level }}</td>
+  <td>{{ doctor.name if doctor else 'Unassigned' }}</td>
+  <td>{% if q.served %}✔️{% else %}⏳{% endif %}</td>
+  <td>
+    {% if not q.served %}
+      <form method="POST" action="{{ url_for('main.serve_patient', queue_id=q.queue_id) }}">
+        <button type="submit" class="btn btn-success btn-sm">Serve</button>
+      </form>
+    {% else %}-{% endif %}
+  </td>
+</tr>
+{% endfor %}
 
-            {% else %}-{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
       </tbody>
     </table>
   </div>

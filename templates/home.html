@@ -37,7 +37,6 @@
     {% endif %}
 </div>
 
-<!-- Scroll to Top -->
 <button onclick="scrollToTop()" id="scrollBtn" class="btn btn-primary rounded-circle shadow" style="position:fixed;bottom:30px;right:30px;display:none;">
     ↑
 </button>
@@ -46,7 +45,6 @@
 
 {% block scripts %}
 <script>
-    // Scroll-to-top button visibility
     window.onscroll = function() {
         document.getElementById("scrollBtn").style.display = window.scrollY > 200 ? "block" : "none";
     };
@@ -55,7 +53,6 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // Dark mode toggle
     function toggleDarkMode() {
         document.body.classList.toggle('bg-dark');
         document.body.classList.toggle('text-light');

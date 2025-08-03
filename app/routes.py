@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, request, session, flash
+from flask import Blueprint, render_template, redirect, request, session, flash, make_response, current_app
 from app.models import db, Patient, Queue, Log, Receipt, Doctor
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
@@ -6,8 +6,10 @@ import pandas as pd
 import io
 from flask import send_file
 from flask import url_for
-
-
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from app.simulation import start_simulation_logic, stop_simulation_logic
+import time
 
 main = Blueprint('main', __name__)
 
@@ -29,7 +31,7 @@ def checkin():
         patient_id = request.form['patient_id']
         name = request.form['name']
         phone = request.form['phone']
-        category = request.form['category']  # 👈 Add this line
+        category = request.form['category'] 
 
         patient = Patient(patient_id=patient_id, name=name, phone=phone, category=category)
         db.session.add(patient)
@@ -48,10 +50,20 @@ def checkin():
         queue_entry = Queue(patient_id=patient_id, doctor_id=doctor_id)
         db.session.add(queue_entry)
 
-        receipt = Receipt(patient_id=patient_id, doctor_id=doctor_id)
+        receipt = Receipt(
+    receipt_id=f"R{int(time.time() * 1000)}",  
+    patient_id=patient_id,
+    doctor_id=doctor_id
+)
+
         db.session.add(receipt)
 
-        log = Log(action='Patient checked in', patient_id=patient_id)
+        log = Log(
+    action='Patient checked in',
+    patient_id=patient_id,
+    doctor_id=doctor_id  # <-- Add this
+)
+
         db.session.add(log)
 
         db.session.commit()
@@ -76,14 +88,36 @@ def dashboard():
     if not session.get('admin_logged_in'):
         return redirect('/login')
 
-    queue = (
+    search = request.args.get('search', '').lower()
+    doctor_filter = request.args.get('doctor')
+    status_filter = request.args.get('status')
+
+    queue_query = (
         db.session.query(Queue, Patient, Doctor)
         .join(Patient, Queue.patient_id == Patient.patient_id)
         .outerjoin(Doctor, Queue.doctor_id == Doctor.id)
         .order_by(Queue.arrival_time)
-        .all()
     )
-    return render_template('dashboard.html', queue=queue)
+
+    if search:
+        queue_query = queue_query.filter(
+            (Patient.name.ilike(f"%{search}%")) |
+            (Patient.patient_id.ilike(f"%{search}%"))
+        )
+
+    if doctor_filter:
+        queue_query = queue_query.filter(Doctor.name == doctor_filter)
+
+    if status_filter == 'waiting':
+        queue_query = queue_query.filter(Queue.served == False)
+    elif status_filter == 'served':
+        queue_query = queue_query.filter(Queue.served == True)
+
+    queue = queue_query.all()
+    doctor_list = Doctor.query.all()
+
+    return render_template('dashboard.html', queue=queue, doctor_list=doctor_list)
+
 
 @main.route('/serve/<int:queue_id>', methods=['POST'])
 def serve_patient(queue_id):
@@ -93,7 +127,12 @@ def serve_patient(queue_id):
     queue = Queue.query.get(queue_id)
     if queue:
         queue.served = True
-        log = Log(action='Patient served', patient_id=queue.patient_id)
+        log = Log(
+         action='Patient served',
+        patient_id=queue.patient_id,
+        doctor_id=queue.doctor_id
+)
+
         doctor = Doctor.query.get(queue.doctor_id)
         if doctor:
             doctor.is_available = True
@@ -119,7 +158,12 @@ def doctor_serve_patient(queue_id):
         doctor = Doctor.query.get(doctor_id)
         if doctor:
             doctor.is_available = True
-        log = Log(action='Patient served by doctor', patient_id=queue.patient_id)
+        log = Log(
+    action='Patient served',
+    patient_id=queue.patient_id,
+    doctor_id=queue.doctor_id
+)
+
         db.session.add(log)
         db.session.commit()
         flash('Patient served successfully.', 'success')
@@ -169,14 +213,25 @@ def doctor_dashboard(doctor_id):
 
 @main.route('/export/excel')
 def export_logs_excel():
-    logs = Log.query.all()
+    logs = (
+        db.session.query(Log, Patient.name.label('patient_name'), Doctor.name.label('doctor_name'))
+        .outerjoin(Patient, Log.patient_id == Patient.patient_id)
+        .outerjoin(Doctor, Log.doctor_id == Doctor.id)
+        .order_by(Log.timestamp.desc())
+        .all()
+    )
 
-    data = [{
-        "Timestamp": log.timestamp,
-        "Action": log.action,
-        "User": log.user,
-        "Details": log.details
-    } for log in logs]
+    data = []
+    for log, patient_name, doctor_name in logs:
+        data.append({
+            "Timestamp": log.timestamp,
+            "Action": log.action,
+            "Doctor": Doctor.query.get(log.doctor_id).name if log.doctor_id else "N/A",
+            "Patient ID": log.patient_id,
+            "Patient Name": patient_name or 'N/A',
+            "Doctor Name": doctor_name or 'N/A',
+            "Details": log.details or ''
+        })
 
     df = pd.DataFrame(data)
     output = io.BytesIO()
@@ -185,10 +240,12 @@ def export_logs_excel():
 
     output.seek(0)
 
-    return send_file(output,
-                     download_name="logs.xlsx",
-                     as_attachment=True,
-                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return send_file(
+        output,
+        download_name="logs.xlsx",
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 @main.route('/print_receipt/<int:receipt_id>/')
 def print_receipt(receipt_id):
@@ -201,3 +258,46 @@ def doctor_logout():
     session.pop('doctor_id', None)
     flash('You have been logged out.', 'info')
     return redirect(url_for('main.doctor_login'))
+
+@main.route('/export/pdf')
+def export_logs_pdf():
+    logs = Log.query.all()
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer)
+    pdf.setTitle("Logs Export")
+
+    pdf.drawString(100, 800, "Smart Queue Logs Report")
+
+    y = 760
+    for log in logs:
+        log_line = f"{log.timestamp.strftime('%Y-%m-%d %H:%M:%S')} - {log.action} - {log.details}"
+        pdf.drawString(40, y, log_line)
+        y -= 20
+        if y < 40:
+            pdf.showPage()
+            y = 800
+
+    pdf.save()
+
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name="logs_report.pdf", mimetype='application/pdf')
+
+@main.route('/reset_logs', methods=['POST'])
+def reset_logs():
+    Log.query.delete()
+    db.session.commit()
+    flash("All logs have been cleared.")
+    return redirect(url_for('main.view_logs'))
+
+@main.route('/simulate/start', methods=['POST'])
+def start_simulation():
+    app = current_app._get_current_object()  # 👈 this unwraps the proxy into the real app
+    start_simulation_logic(app)
+    return redirect(url_for('main.dashboard'))
+
+@main.route('/simulate/stop', methods=['GET'])
+def stop_simulation():
+    stop_simulation_logic()
+    return redirect(url_for('main.dashboard'))
+

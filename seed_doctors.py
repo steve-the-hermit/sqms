@@ -20,7 +20,7 @@ doctors = [
 with app.app_context():
     for i, name in enumerate(doctors, start=1):
         username = f"doctor{i}"
-        password = generate_password_hash("password123")
+        password = generate_password_hash("doctor123")
         doctor = Doctor(
             name=name,
             is_available=True,
